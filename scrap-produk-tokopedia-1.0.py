@@ -15,7 +15,7 @@ Notes:
 01. After run this script, please inspect the results manually
 '''
 #import module
-import sys, re, urllib2, time, random, csv
+import sys, re, urllib2, time, random, csv, urllib
 #import beautifulsoup module
 from bs4 import BeautifulSoup  
 
@@ -112,13 +112,16 @@ with open(namafileurl) as fileurlproduk, open(namafiledataproduk, "wb") as filed
             datagambar = str(temp)
             #make a new soup
             datagambar_soup = BeautifulSoup(datagambar, 'html.parser')
-            linkgambar = []
+            
             #extracting image url
+            image_counter = 0
             for linkgambar_list in datagambar_soup.find_all('a'):
                 temp_gambar = linkgambar_list.get('href')
                 #remove "#" from result
                 if temp_gambar != "#":
-                    linkgambar.append(temp_gambar)
+                    image_counter = image_counter + 1
+                    #save image
+                    urllib.urlretrieve(temp_gambar, namafoldergambarproduk + namaproduk + "-" + str(image_counter) + ".jpg")
                     #print "Link Gambar = " + str(linkgambar)
         
         #check the category result. if there are less than 3 category (sub-category) than, append "-" to make it three.
