@@ -1,23 +1,79 @@
 '''
 SCRAP TOKOPEDIA.COM PRODUCTS
-Versi 1. created 8 Juli 2016 by Ardya
+Versi 1. created 8 July 2016 by Ardya
+Last update 26 July 2016
 
 Pre-requirements:
 01. User must provide a file consisting products url (one url per-line)
-02. This script use mobile version URL (m.tokopedia.com) not full website URL (www.tokopedia.com)
 
 Input Argument:
 01. URL of products file 
 02. Ouput Data File (where the scrape results stored)
-03. Target directory to save image of products
+03. Target directory to save product's images
 
 Notes:
 01. After run this script, please inspect the results manually
+
+External Module:
+01. https://github.com/python-pillow/Pillow/blob/master/docs/installation.rst
+02. BeautifulSoup
+03. https://pypi.python.org/pypi/fake-useragent
+
 '''
 #import module
-import sys, re, urllib2, time, random, csv, urllib
+import sys, re, urllib2, time, random, csv, urllib, argparse, math, socket, ssl
 #import beautifulsoup module
-from bs4 import BeautifulSoup  
+from bs4 import BeautifulSoup
+#import Pillow
+from PIL import Image
+#import fake useragent
+from fake_useragent import UserAgent
+ua = UserAgent()
+#update user agent database
+#ua.update()
+
+#creating function to download product image
+def downloadproductimage(imageurl):
+    #create image file name
+    imagefilename = namafoldergambarproduk + namaproduk + "-" + str(image_counter) + ".jpg"
+    #download image
+    urllib.urlretrieve(imageurl, imagefilename)
+    #try to open image    
+    try:
+        originalimage = Image.open(imagefilename)
+    except:
+        print "Unable to load image"
+    #calculate image size
+    imagewidth, imageheight = originalimage.size
+    print "Ukuran gambar = " + str(imagewidth) + " " + str(imageheight)
+    #if image size is smaller than 400 px, do enlargement
+    if imagewidth < 400 or imageheight < 400:
+        print "hitted"
+        #enlargment factor
+        enlargeimageby = math.ceil(400/min(imagewidth,imageheight)) + 1
+        print "enlarge by = " + str(enlargeimageby)
+        #calculate new image size. must be larger or equal to 400 px
+        imagewidth = int(enlargeimageby) * imagewidth
+        imageheight = int(enlargeimageby) * imageheight
+        #resize the image
+        originalimage = originalimage.resize([imagewidth,imageheight])
+        #save resized image. overwrite the old image file
+        originalimage.save(imagefilename)
+        return
+    else:
+        return
+
+'''
+Still in development
+
+parser = argparse.ArgumentParser(description='Scrape Product Data from tokopedia.com')
+parser.add_argument('Input File', metavar='--input', nargs=1, help='Input file consisting a product URL (one per line)')
+parser.add_argument('Output File', metavar='--output', nargs=1, help='Output Data File (where the scrape results stored')
+parser.add_argument('Image Folder', metavar='--image', nargs=1, help='Target directory to save product\'s images')
+
+args = parser.parse_args()
+
+'''
 
 #file consisting products url
 namafileurl = sys.argv[1]
@@ -29,6 +85,9 @@ namafoldergambarproduk = sys.argv[3]
 #Nama Produk = product name, Harga Ecer = retail price, Minimal Pembelian = min. purchase quantity, Berat Produk = product weight, Asuransi = insurance, Kondisi Product = Product condition, Kategori = category, Deskripsi = description, Kuantitas Grosir = wholesale quantity, Harga Grosir = wholesale price
 fieldproduk = ['Nama Produk', 'Harga Ecer', 'Minimal Pembelian', 'Berat Produk', 'Asuransi', 'Kondisi Produk', 'Kategori 1', 'Kategori 2', 'Kategori 3', 'Deskripsi', 'Kuantitas Grosir 1', 'Harga Grosir 1', 'Kuantitas Grosir 2','Harga Grosir 2', 'Kuantitas Grosir 3','Harga Grosir 3']
 
+#set global timeout setting
+socket.setdefaulttimeout(30)
+
 #open input file (url of products file)
 with open(namafileurl) as fileurlproduk, open(namafiledataproduk, "wb") as filedataproduk:
     #csv writer initialization
@@ -38,7 +97,24 @@ with open(namafileurl) as fileurlproduk, open(namafiledataproduk, "wb") as filed
     #take url from file. one url per-line
     for urlproduk in fileurlproduk:
         #print "URL Produk = " + urlproduk
-        dataproduk = urllib2.urlopen(urlproduk).read()
+        request = urllib2.Request(urlproduk, headers = {'User-Agent': ua.chrome})
+        
+        #opening URL.
+        try:
+            dataproduk = urllib2.urlopen(request).read()
+        except urllib2.HTTPError, error:
+            print "Error opening URL = " + urlproduk
+            continue
+        except urllib2.URLError, error:
+            print "URL Error not valid = " + urlproduk
+            continue
+        except ssl.SSLError, error:
+            print "SSL Error = " + urlproduk
+        else:
+            print "Other Error occured = " + urlproduk
+            continue
+
+        #creating soup
         dataproduk = BeautifulSoup(dataproduk, 'html.parser')
         
         #get product name. 
@@ -68,6 +144,9 @@ with open(namafileurl) as fileurlproduk, open(namafiledataproduk, "wb") as filed
             minpemesanan = info[(info.find("Min") + 4):]
             #print "Pemesanan Min. = " + minpemesanan
         
+        #replace br with new line 
+        for temp in dataproduk.find_all("br"):
+            temp.replace_with("\n")
         #get product description
         for temp in dataproduk.find_all("p", itemprop= "description"):
             deskripsi = temp.get_text()
@@ -121,7 +200,7 @@ with open(namafileurl) as fileurlproduk, open(namafiledataproduk, "wb") as filed
                 if temp_gambar != "#":
                     image_counter = image_counter + 1
                     #save image
-                    urllib.urlretrieve(temp_gambar, namafoldergambarproduk + namaproduk + "-" + str(image_counter) + ".jpg")
+                    downloadproductimage(temp_gambar)
                     #print "Link Gambar = " + str(linkgambar)
         
         #check the category result. if there are less than 3 category (sub-category) than, append "-" to make it three.
@@ -139,4 +218,4 @@ with open(namafileurl) as fileurlproduk, open(namafiledataproduk, "wb") as filed
         print counter_produk
         counter_produk = counter_produk + 1
         #give some short delay before scraping next product
-        time.sleep(random.randrange(2, 6))
+        time.sleep(random.randrange(10, 20))
